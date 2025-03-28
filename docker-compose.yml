@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:latest    # Sử dụng Redis image mới nhất
+    container_name: redis  # Đặt tên cho container là "redis"
+    ports:
+      - "6379:6379"        # Mở cổng Redis (6379) từ container và ánh xạ vào máy chủ local
+    volumes:
+      - redis-data:/data   # Mount volume để lưu trữ dữ liệu Redis vĩnh viễn
+    restart: always        # Tự động khởi động lại Redis nếu nó dừng
+
+volumes:
+  redis-data:             # Định nghĩa volume để Redis có thể lưu trữ dữ liệu vĩnh viễn
