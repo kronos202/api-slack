@@ -1,0 +1,249 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Provider {
+  GOOGLE
+  FACEBOOK
+  EMAIL
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  MEMBER
+  GUEST
+}
+
+
+enum MessageType {
+  FILE
+  TEXT
+  IMAGE
+  MIXED
+}
+
+enum ImageType {
+  AVATAR 
+  MESSAGE 
+  OTHER 
+}
+
+enum StorageType {
+  LOCAL
+  CLOUDINARY
+}
+
+
+model User {
+  id          String    @id @default(cuid())
+  email    String  @unique
+  firstName    String @map("first_name")   @db.VarChar(50)
+  lastName    String @map("last_name")   @db.VarChar(50)
+
+  username String @unique @db.VarChar(50)
+  password String? @db.VarChar(255)
+  bio      String? @db.Text
+  active Boolean @default(false)
+  provider Provider? @default(EMAIL) 
+  socialId String? @map("social_id")
+
+  avatar String @default("https://api.realworld.io/images/smiley-cyrus.jpeg")
+
+  deletedAt DateTime? @default(dbgenerated("null")) @map("deleted_at")
+  lastLogin DateTime? @updatedAt @map("last_login")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  Session Session[] 
+  Member Member[]
+  Workspace Workspace[]
+  Image Image[]
+
+  @@map("user")
+}
+
+
+model Member {
+  id          String    @id @default(cuid())
+  userId    String 
+  workspaceId String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  role Role? @default(GUEST)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  Message Message[]
+  MemberChannel MemberChannel[]
+  Reaction Reaction[]
+  ConversationParticipant ConversationParticipant[]
+  Conversation Conversation[]
+
+  @@unique([userId, workspaceId])
+
+  @@map("member")
+}
+
+model Workspace {
+  id          String    @id @default(cuid())
+  name    String @db.VarChar(255)
+  ownerId String
+  member User @relation( fields: [ownerId],references: [id])
+  joinCode    String     @unique
+  
+ 
+  Member Member[]
+  Channel Channel[]
+  Conversation Conversation[]
+  Message Message[]
+  Reaction Reaction[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([ id])
+
+  @@map("workspace")
+}
+
+
+model Channel {
+  id          String    @id @default(cuid())
+  name    String @db.VarChar(255) 
+  isPrivate Boolean @default(false) @map("is_private")
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId],references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  Message Message[] 
+  Member MemberChannel[] 
+
+  @@unique([name, workspaceId])
+
+  @@map("channel")
+}
+
+model MemberChannel {
+  memberId  String
+  channelId String
+
+  member    Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([memberId, channelId]) // Đây là khóa chính của bảng trung gian
+  @@map("member_channel") // Tên bảng trung gian
+}
+
+model Conversation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  createdBy String 
+  member Member @relation(fields: [createdBy],references: [id],onDelete: Cascade)
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages    Message[]
+  participants ConversationParticipant[]
+
+
+  @@map("conversation")
+}
+
+model ConversationParticipant {
+  id              String    @id @default(cuid())
+  conversationId  String
+  memberId        String
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  member          Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("conversation_participant")
+
+}
+
+
+model Message {
+  id               String    @id @default(cuid())
+  content          String?
+  messageType MessageType? @default(TEXT) @map("message_type")
+  memberId         String
+  workspaceId      String
+  channelId        String?
+  parentMessageId  String?
+  conversationId   String?
+
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member           Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  channel          Channel?  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  conversation     Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parentMessage    Message?  @relation("ParentMessage", fields: [parentMessageId], references: [id], onDelete: Cascade)
+  replies          Message[] @relation("ParentMessage")
+
+  reaction Reaction[]
+  Image Image[] 
+
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("message")
+}
+
+model Reaction {
+  id           String    @id @default(cuid())
+  value        String
+  memberId     String
+  workspaceId  String
+  messageId    String
+
+  member       Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  message      Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("reaction")
+}
+
+model Image {
+  id          String    @id @default(cuid())
+  imageUrl String 
+  cloudinaryId String? 
+  metadata    Json?
+  // type: avatar:message
+  userId    String  @map("user_id")
+  user      User      @relation(fields: [userId], references: [id],onDelete: Cascade)
+  message     Message?  @relation(fields: [messageId], references: [id], onDelete: Cascade) // Quan hệ với Message
+  messageId   String?
+  storageType StorageType @default(LOCAL) // Kiểu lưu trữ (local hoặc cloudinary)
+  type       ImageType   @default(AVATAR) // Loại ảnh sử dụng enum
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("image")
+}
+
+model Session {
+  id          Int    @id @default(autoincrement())
+  userId    String  @map("user_id")
+  user      User      @relation(fields: [userId], references: [id],onDelete: Cascade)
+  hash      String    @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("session")
+}
