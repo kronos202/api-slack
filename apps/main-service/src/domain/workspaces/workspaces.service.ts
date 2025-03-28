@@ -280,14 +280,23 @@ export class WorkspacesService {
   async getMembers(workspaceId: string, userId: string) {
     const isMember = await this.checkWorkspaceAccess(workspaceId, userId);
 
-    if (isMember) {
+    if (!isMember) {
       throw new UnauthorizedException('Khong co quyen truy cap!');
     }
 
     // Kiểm tra xem workspace có tồn tại và có thành viên không
     const members = await this.databaseService.member.findMany({
       where: { workspaceId },
-      include: { user: true },
+      include: {
+        user: {
+          select: {
+            avatar: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+          },
+        },
+      },
     });
 
     if (members.length === 0) {
@@ -406,7 +415,7 @@ export class WorkspacesService {
   async addMembers(workspaceId: string, userId: string, userIds: string[]) {
     const isMember = await this.checkWorkspaceAccess(workspaceId, userId);
 
-    if (isMember) {
+    if (!isMember) {
       throw new UnauthorizedException('ko phai la thanh vien cua workspace');
     }
 
